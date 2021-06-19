@@ -66,7 +66,7 @@ knows which is which. No specific order is required.
 
 If query param required, don't declare a default value
 """
-######## GET ########
+########## GET ##########
 
 @app.get("/")
 async def root():
@@ -135,7 +135,7 @@ async def get_model(model_name: ModelName):
 async def read_file(file_path: str):
     return {"file_path": file_path}
 
-######## POST ########
+########## POST ##########
 
 @app.post("/images/multiple/")
 async def create_multiple_images(images: List[Image]):
@@ -156,11 +156,12 @@ async def create_offer(offer: Offer):
 
 
 
-######## PUT ########
+########## PUT ##########
 
 # Declare body, path and query params, all at the same time.
 @app.put("/items/{item_id}")
 async def update_item(item_id: int, item: Item):
     results = {"item_id": item_id, "item": item}
     return results
+
 
