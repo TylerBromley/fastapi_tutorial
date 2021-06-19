@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import Optional
+
 from fastapi import FastAPI
 
 class ModelName(str, Enum):
@@ -8,6 +10,8 @@ class ModelName(str, Enum):
 
 app = FastAPI()
 
+fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
+
 @app.get("/")
 async def root():
     return {"message": "Welcome Home!"}
@@ -16,8 +20,39 @@ async def root():
 async def read_user_me():
     return {"user_id": "the current user"}
 
+"""
+Declaring other function params that are not part of the path params,
+they are automatically interpreted as "query" params. 
+
+Multiple paths
+and query parameters can be declared at the same time and FastAPI
+knows which is which. No specific order is required.
+
+If query param required, don't declare a default value
+"""
+
+@app.get("/items/")
+async def read_item(skip: int = 0, limit: int = 10):
+    return fake_items_db[skip: skip + limit]
+
+@app.get("/users/{user_id}/items/{items_id}")
+async def read_user_item(
+    user_id: int, item_id: str, needy: str, q: Optional[str] = None, short: bool = False
+):
+    item = {"item_id": item_id, "needy": needy, "owner_id": user_id}
+    if q:
+        item.update({"q": q})
+    if not short:
+        item.update(
+            {"description": "This is an amazing item that has a long description"}
+        )
+    return item
+
+# the function param q will be optional, and None by default
 @app.get("/items/{item_id}")
-async def read_item(item_id: str):
+async def read_item_id(item_id: str, q: Optional[str] = None):
+    if q:
+        return {"item_id": item_id, "q": q}
     return {"item_id": item_id}
 
 @app.get("/models/{model_name}")
