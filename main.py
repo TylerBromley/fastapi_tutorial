@@ -1,8 +1,18 @@
 from enum import Enum
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union
 
-from fastapi import Body, Cookie, FastAPI, Header, Path, Query
+from fastapi import Body, Cookie, FastAPI, Form, Header, Path, Query
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
+
+class BaseItem(BaseModel):
+    description: str
+    type: str
+
+class CarItem(BaseItem):
+    type = "car"
+
+class PlaneItem(BaseItem):
+    type = "plane"
 
 class Image(BaseModel):
     url: HttpUrl
@@ -46,20 +56,20 @@ class Offer(BaseModel):
     price: float
     items: List[Item]
 
-class User(BaseModel):
+class UserBase(BaseModel):
     username: str
+    email: EmailStr
     full_name: Optional[str] = None
 
-class UserIn(BaseModel):
-    username: str
+class UserIn(UserBase):
     password: str
-    email: EmailStr
-    full_name: Optional[str] = None
 
-class UserOut(BaseModel):
-    username: str
-    email: EmailStr
-    full_name: Optional[str] = None
+class UserOut(UserBase):
+    pass
+
+class UserInDB(UserBase):
+    hashed_password: str
+
 
 
 
@@ -74,6 +84,22 @@ items = {
     "baz": {"name": "Baz", "description": "There goes my baz", "price": 50.2, "tax": 10.5,},
 }
 
+vehicle_items = {
+    "item1": {"description": "All my friends drive a low rider", "type": "car"},
+    "item2": {"description": "Music is my aeroplane, it's my aeroplane",
+    "type": "plane",
+    "size": 5,
+    },
+}
+
+def fake_password_hasher(raw_password: str):
+    return "supersecret" + raw_password
+
+def fake_save_user(user_in: UserIn):
+    hashed_pasword = fake_password_hasher(user_in.password)
+    user_in_db = UserInDB(**user_in.dict(), hashed_password=hashed_pasword)
+    print("User saved! ...not really")
+    return user_in_db
 """
 Declaring other function params that are not part of the path params,
 they are automatically interpreted as "query" params. 
@@ -165,23 +191,32 @@ async def get_model(model_name: ModelName):
 async def read_file(file_path: str):
     return {"file_path": file_path}
 
+@app.get("/vehicle_items/{item_id}", response_model=Union[PlaneItem, CarItem])
+async def read_vehicle_item(item_id: str):
+    return vehicle_items[item_id]
+
 ########## POST ##########
 
 @app.post("/images/multiple/")
 async def create_multiple_images(images: List[Image]):
     return images
 
-@app.post("/items/", response_model=Item)
-async def create_item(item: Item):
-    return item
+@app.post("/items/", status_code=201)
+async def create_item(name: str):
+    return {"name": name}
+
+@app.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    return {"username": username}
 
 @app.post("/offers")
 async def create_offer(offer: Offer):
     return offer
 
 @app.post("/user/", response_model=UserOut)
-async def create_user(user: UserIn):
-    return user
+async def create_user(user_in: UserIn):
+    user_saved = fake_save_user(user_in)
+    return user_saved
 
 
 
