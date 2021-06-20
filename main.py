@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import List, Optional, Set
 
-from fastapi import Body, FastAPI, Path, Query
-from pydantic import BaseModel, Field, HttpUrl
+from fastapi import Body, Cookie, FastAPI, Header, Path, Query
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 class Image(BaseModel):
     url: HttpUrl
@@ -14,8 +14,8 @@ class Item(BaseModel):
         None, title="The description of the item", max_length=300
     )
     price: float = Field(..., gt=0, description="The price must be greater than zero")
-    tax: Optional[float] = None
-    tags: Set[str] = set()
+    tax: float = 10.5
+    tags: List[str] = []
     image: Optional[List[Image]] = None
 
     class Config:
@@ -50,11 +50,29 @@ class User(BaseModel):
     username: str
     full_name: Optional[str] = None
 
+class UserIn(BaseModel):
+    username: str
+    password: str
+    email: EmailStr
+    full_name: Optional[str] = None
+
+class UserOut(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: Optional[str] = None
+
+
 
 
 app = FastAPI()
 
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
+
+items = {
+    "foo": {"name": "Foo", "price": 50.2},
+    "bar": {"name": "Bar", "description": "The Bar Fighters", "price": 62, "tax": 20.2},
+    "baz": {"name": "Baz", "description": "There goes my baz", "price": 50.2, "tax": 10.5,},
+}
 
 """
 Declaring other function params that are not part of the path params,
@@ -76,6 +94,7 @@ async def root():
 # using ... as the first arg in query means it is required
 @app.get("/items/")
 async def read_items(
+    ads_id: Optional[str] = Cookie(None),
     q: Optional[str] = Query(
         None,
         title="Query string",
@@ -84,23 +103,34 @@ async def read_items(
         description="Query string for the items to search in the database " +
         "that have a good match",
         # regex="^fixedquery$",
-    )
+    ),
+    user_agent: Optional[str] = Header(None),
 ):
     results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
+    if user_agent:
+        results.update({"User-Agent": user_agent})
+    if ads_id:
+        results.update(({"ads_id": ads_id}))
     if q:
         results.update({"q": q})
     return results
 
 # the function param q will be optional, and None by default
-@app.get("/items/{item_id}")
-async def read_item_id(
-    item_id: int = Path(..., title="The ID of the item to get"),
-    q: Optional[str] = Query(None, alias="item-query")
-):
-    results = {"item_id": item_id}
-    if q:
-        results.update({"q": q})
-    return results
+@app.get("/items/{item_id}", response_model=Item, response_model_exclude_unset=True)
+async def read_item_id(item_id: str):
+    return items[item_id]
+
+@app.get(
+    "/items/{item_id}/name",
+    response_model=Item,
+    response_model_include={"name", "description"},
+)
+async def read_item_name(item_id: str):
+    return items[item_id]
+
+@app.get("/items/{item_id}/public", response_model=Item, response_model_exclude={"tax"})
+async def read_item_public_data(item_id: str):
+    return items[item_id]
 
 @app.get("/users/me")
 async def read_user_me():
@@ -141,18 +171,17 @@ async def read_file(file_path: str):
 async def create_multiple_images(images: List[Image]):
     return images
 
-@app.post("/items/")
+@app.post("/items/", response_model=Item)
 async def create_item(item: Item):
-    # update the model with price + tax
-    item_dict = item.dict()
-    if item.tax:
-        price_with_tax = item.price + item.tax
-        item_dict.update({"price_with_tax": price_with_tax})
-    return item_dict
+    return item
 
 @app.post("/offers")
 async def create_offer(offer: Offer):
     return offer
+
+@app.post("/user/", response_model=UserOut)
+async def create_user(user: UserIn):
+    return user
 
 
 
